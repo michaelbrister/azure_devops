@@ -1,0 +1,82 @@
+trigger:
+- main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  azureSubscription: 'Azure_Service_Connection'
+  resourceGroup: 'my-resource-group'
+  containerRegistry: 'myacr.azurecr.io'
+  dockerAppImage: 'my-app'
+  mysqlServer: 'my-mysql-server'
+  mysqlDatabase: 'appdb'
+  mysqlUser: 'adminuser'
+  mysqlPassword: 'SecureP@ssw0rd!'
+  terraformWorkingDirectory: 'terraform'
+
+stages:
+- stage: Terraform_Provision
+  displayName: 'Provision Infrastructure with Terraform'
+  jobs:
+  - job: Terraform
+    displayName: 'Run Terraform'
+    steps:
+    - checkout: self
+
+    - task: TerraformInstaller@1
+      displayName: 'Install Terraform'
+      inputs:
+        terraformVersion: 'latest'
+
+    - task: TerraformCLI@1
+      displayName: 'Terraform Init'
+      inputs:
+        command: 'init'
+        workingDirectory: '$(terraformWorkingDirectory)'
+
+    - task: TerraformCLI@1
+      displayName: 'Terraform Apply'
+      inputs:
+        command: 'apply'
+        workingDirectory: '$(terraformWorkingDirectory)'
+        commandOptions: '-auto-approve'
+
+- stage: Build_and_Push
+  displayName: 'Build and Push Docker Images'
+  jobs:
+  - job: Build
+    displayName: 'Build and Push to ACR'
+    steps:
+    - script: |
+        docker build -t $(containerRegistry)/$(dockerAppImage):latest .
+        docker push $(containerRegistry)/$(dockerAppImage):latest
+      displayName: 'Build and Push App Image'
+
+- stage: Deploy_to_ACI
+  displayName: 'Deploy to Azure Container Instances'
+  jobs:
+  - job: Deploy
+    displayName: 'Deploy ACI Containers'
+    steps:
+    - task: AzureCLI@2
+      displayName: 'Deploy Application Container'
+      inputs:
+        azureSubscription: $(azureSubscription)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          az containerapp update --name my-app-container --resource-group $(resourceGroup) \
+            --image $(containerRegistry)/$(dockerAppImage):latest \
+            --set-env-vars "MYSQL_HOST=$(mysqlServer).mysql.database.azure.com" "MYSQL_DATABASE=$(mysqlDatabase)" "MYSQL_USER=$(mysqlUser)" "MYSQL_PASSWORD=$(mysqlPassword)"
+
+    - task: AzureCLI@2
+      displayName: 'Deploy Solr Container'
+      inputs:
+        azureSubscription: $(azureSubscription)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          az container create --resource-group $(resourceGroup) --name solr-container \
+            --image $(containerRegistry)/$(dockerSolrImage):latest --dns-name-label solr-instance \
+            --ports 8983 --vnet my-vnet --subnet appgw-subnet
