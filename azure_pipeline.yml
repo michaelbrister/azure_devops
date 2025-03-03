@@ -76,6 +76,7 @@ stages:
           az containerapp update --name my-app-container --resource-group $(resourceGroup) \
             --image $(containerRegistry)/$(dockerAppImage):latest \
             --set-env-vars "MYSQL_HOST=$(mysqlServer).mysql.database.azure.com" "MYSQL_DATABASE=$(mysqlDatabase)" "MYSQL_USER=$(mysqlUser)" "MYSQL_PASSWORD=$(mysqlPassword)"
+            --set-env-vars "REDIRECT_HTTP_TO_HTTPS=true"
 
     - task: AzureCLI@2
       displayName: 'Deploy Solr Container'
