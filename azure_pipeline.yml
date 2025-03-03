@@ -9,6 +9,7 @@ variables:
   resourceGroup: 'my-resource-group'
   containerRegistry: 'myacr.azurecr.io'
   dockerAppImage: 'my-app'
+  dockerSolrImage: 'solr'
   mysqlServer: 'my-mysql-server'
   mysqlDatabase: 'appdb'
   mysqlUser: 'adminuser'
@@ -52,6 +53,12 @@ stages:
         docker build -t $(containerRegistry)/$(dockerAppImage):latest .
         docker push $(containerRegistry)/$(dockerAppImage):latest
       displayName: 'Build and Push App Image'
+
+    - script: |
+        docker pull solr:latest
+        docker tag solr:latest $(containerRegistry)/$(dockerSolrImage):latest
+        docker push $(containerRegistry)/$(dockerSolrImage):latest
+      displayName: 'Push Solr Image'
 
 - stage: Deploy_to_ACI
   displayName: 'Deploy to Azure Container Instances'
